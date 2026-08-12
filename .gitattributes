@@ -1,0 +1,17 @@
+# Normalise to LF in the repository and on checkout. KiCad files and the test
+# fixtures are compared byte-for-byte, and the converter always writes LF, so
+# letting Git rewrite line endings per-platform would make CI results differ
+# between the Linux, Windows and macOS jobs.
+* text=auto eol=lf
+
+# KiCad sources: always LF, never touched.
+*.sch      text eol=lf
+*.kicad_sch text eol=lf
+*.kicad_sym text eol=lf
+*.kicad_pcb text eol=lf
+*.lib      text eol=lf
+
+*.png      binary
+*.jpg      binary
+*.pdf      binary
+*.zip      binary
