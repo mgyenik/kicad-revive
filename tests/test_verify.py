@@ -171,3 +171,44 @@ class TestCompare:
         result = compare(netlist_file, path)
         assert "C1" in result.extra_refs
         assert not result.ok
+
+
+# A KiCad 9 netlist, in the compact layout that release writes. KiCad 10
+# pretty-prints the same content one token per line; a parser that assumes
+# either layout silently reports zero nets against the other.
+COMPACT_NETLIST = """\
+(export (version "E")
+  (design)
+  (nets
+    (net (code "1") (name "VCC")
+      (node (ref "R1") (pin "1") (pintype "passive"))
+      (node (ref "C1") (pin "1") (pintype "passive")))
+    (net (code "2") (name "GND")
+      (node (ref "R1") (pin "2") (pintype "passive"))
+      (node (ref "C1") (pin "2") (pintype "passive")))))
+"""
+
+
+class TestNetlistLayoutTolerance:
+    def test_compact_layout_parses(self, tmp_path):
+        path = tmp_path / "compact.net"
+        path.write_text(COMPACT_NETLIST, encoding="utf-8")
+        nets = parse_netlist(path)
+        assert nets["VCC"] == {("R1", "1"), ("C1", "1")}
+        assert nets["GND"] == {("R1", "2"), ("C1", "2")}
+
+    def test_both_layouts_give_the_same_result(self, tmp_path):
+        compact = tmp_path / "c.net"
+        compact.write_text(COMPACT_NETLIST, encoding="utf-8")
+        pretty = tmp_path / "p.net"
+        pretty.write_text(NETLIST, encoding="utf-8")
+        a = parse_netlist(compact)
+        b = {k: v for k, v in parse_netlist(pretty).items() if not k.startswith("unconnected-")}
+        assert a == b
+
+    def test_compact_netlist_verifies_against_a_board(self, tmp_path, board_file):
+        path = tmp_path / "compact.net"
+        path.write_text(COMPACT_NETLIST, encoding="utf-8")
+        result = compare(path, board_file)
+        assert result.nets_ok
+        assert result.matched_nets == 2

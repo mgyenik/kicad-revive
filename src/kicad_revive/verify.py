@@ -21,7 +21,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .sexpr import find_blocks
+from .sexpr import find_blocks, find_blocks_matching
 
 
 @dataclass
@@ -58,19 +58,36 @@ class Comparison:
         return self.nets_ok and not self.extra_refs
 
 
+#: Matches the head of a ``(net ...)`` form in either netlist layout.
+#:
+#: KiCad's netlist writer changed presentation between releases: KiCad 9 and
+#: earlier emit compact forms (``(comp (ref "R1")`` on one line) while KiCad 10
+#: pretty-prints one token per line. Matching only the pretty-printed shape
+#: made verification silently report zero nets on KiCad 9 -- a false failure,
+#: which is worse than no check at all because it discredits a correct
+#: conversion.
+_NET_HEAD = re.compile(r"\(net\s")
+
+#: ``(ref ...)`` and ``(pin ...)`` may be separated by a newline or a space.
+_NODE = re.compile(r'\(ref "([^"]+)"\)\s*\(pin "([^"]+)"\)')
+
+
 def parse_netlist(path: Path) -> dict[str, set[tuple[str, str]]]:
-    """Read a KiCad netlist export into ``{net_name: {(ref, pin), ...}}``."""
+    """Read a KiCad netlist export into ``{net_name: {(ref, pin), ...}}``.
+
+    Tolerates both the compact and pretty-printed netlist layouts.
+    """
     text = Path(path).read_text(encoding="utf-8", errors="replace")
     index = text.find("(nets")
     if index < 0:
         return {}
 
     nets: dict[str, set[tuple[str, str]]] = defaultdict(set)
-    for block in find_blocks(text[index:], "(net\n"):
+    for block in find_blocks_matching(text[index:], _NET_HEAD):
         name = re.search(r'\(name "([^"]*)"\)', block)
         if not name:
             continue
-        for node in re.finditer(r'\(ref "([^"]+)"\)\s*\n\s*\(pin "([^"]+)"\)', block):
+        for node in _NODE.finditer(block):
             nets[name.group(1)].add((node.group(1), node.group(2)))
     return dict(nets)
 

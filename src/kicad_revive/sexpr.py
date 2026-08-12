@@ -65,6 +65,23 @@ def find_blocks_with_indent(text: str, head: str, *, depth: int | None = None) -
         yield text[start:end]
 
 
+def find_blocks_matching(
+    text: str, pattern: re.Pattern[str], *, depth: int | None = None
+) -> Iterator[str]:
+    """Like :func:`find_blocks`, but the head is a regular expression.
+
+    Needed where KiCad's own formatting varies between releases -- a literal
+    head such as ``"(net\n"`` silently matches nothing against a compact file.
+    """
+    for match in pattern.finditer(text):
+        start = match.start()
+        if depth is not None and _depth_at(text, start) != depth:
+            continue
+        end = _match_paren(text, start)
+        if end is not None:
+            yield text[start:end]
+
+
 def _depth_at(text: str, index: int) -> int:
     """Paren nesting depth at *index*, ignoring parens inside quoted atoms."""
     depth = 0
